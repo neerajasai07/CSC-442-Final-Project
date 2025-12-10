@@ -1,0 +1,179 @@
+---
+title: "CSC/ST 442 Final Project"
+author: "Neeraja Uppala"
+date: "December 9, 2025"
+output:
+  pdf_document: default
+---
+# Data Cleaning
+```{r message = FALSE}
+library(tidyverse)
+library(tibble)
+library(ggplot2)
+
+spotify_tracks <- read.csv("spotify_tracks.csv")
+
+spotify_tracks_cleaned <- spotify_tracks |>
+  select(popularity, danceability, energy, loudness, speechiness, acousticness, 
+         instrumentalness, liveness, valence, tempo)
+
+# Check if columns have NA values
+# colSums(is.na(spotify_tracks_cleaned))
+
+glimpse(spotify_tracks_cleaned)
+```
+\newpage
+
+# Histogram
+```{r message = FALSE}
+ggplot(spotify_tracks_cleaned, aes(x = popularity)) +
+  geom_histogram(bins = 30, color = "white") +
+  labs(
+    title = "Distrubution of Song Popularity", 
+    x = "Popularity Score", 
+    y = "Number of Tracks"
+  )
+
+```
+\newpage
+
+# Scatterplots
+```{r, fig.width=6, fig.height=4,  echo = FALSE, message=FALSE}
+
+ggplot(spotify_tracks_cleaned, aes(danceability, popularity)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  labs (
+    title = "Popularity Vs. Danceability", 
+    x = "Danceability", 
+    y = "Popularity"
+  )
+```
+
+```{r, fig.width=6, fig.height=4,  echo = FALSE, message=FALSE}
+ggplot(spotify_tracks_cleaned, aes(energy, popularity)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  labs (
+    title = "Popularity Vs. Energy", 
+    x = "Energy", 
+    y = "Popularity"
+  )
+```
+
+```{r, fig.width=6, fig.height=4,  echo = FALSE, message=FALSE}
+ggplot(spotify_tracks_cleaned, aes(acousticness, popularity)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  labs (
+    title = "Popularity Vs. Acousticness", 
+    x = "Acousticness", 
+    y = "Popularity"
+  )
+```
+
+```{r, fig.width=6, fig.height=4,  echo = FALSE, message=FALSE}
+ggplot(spotify_tracks_cleaned, aes(valence, popularity)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth() +
+  labs (
+    title = "Popularity Vs. Valence", 
+    x = "Valence", 
+    y = "Popularity"
+  )
+```
+
+\newpage
+
+# PCA - Principal Component Analysis
+```{r message = FALSE}
+spotify_tracks_scaled <- scale(spotify_tracks_cleaned)
+spotify_tracks_pca <- prcomp(spotify_tracks_scaled, center = TRUE, scale = TRUE)
+spotify_tracks_pca
+summary(spotify_tracks_pca)
+
+eigenvalues <- spotify_tracks_pca$sdev^2
+
+plot(eigenvalues/sum(eigenvalues), type = "b",
+     main = "Scree Plot",
+     xlab = "Principal Component",
+     ylab = "Eigenvalue")
+```
+
+# K-Means Clustering
+```{r message = FALSE, warning = FALSE}
+spotify_tracks_transformed <- data.frame(spotify_tracks_pca$x[, 1:2])
+set.seed(123)
+spotify_tracks_km <- kmeans(spotify_tracks_transformed, centers = 3, 
+                            iter.max = 50, nstart = 20) 
+
+spotify_tracks_transformed$Cluster <- factor(spotify_tracks_km$cluster)
+ggplot(spotify_tracks_transformed, aes(x = PC1, PC2, color = Cluster)) +
+  geom_point() +
+  labs (
+    title = "K-Means Clustering (k = 3) of PCA Scores", 
+    x = "PC1", 
+    y = "PC2"
+  )
+```
+
+\newpage
+
+# Linear Regression Model
+```{r message = FALSE, warning = FALSE}
+set.seed(123)
+train_idx <- 1:floor(0.7*nrow(spotify_tracks_cleaned))
+spotify_tracks_train <- spotify_tracks_cleaned[train_idx, ]
+spotify_tracks_test <- spotify_tracks_cleaned[-train_idx,]
+
+spotify_tracks_mod <- lm(popularity ~ danceability + energy + loudness + 
+                           speechiness + acousticness, instrumentalness + 
+                           liveness + valence + tempo, data = spotify_tracks_train)
+summary(spotify_tracks_mod)
+```
+
+\newpage
+
+# Ridge Regression
+```{r message = FALSE, warning = FALSE}
+library(glmnet)
+
+set.seed(123)
+
+train_idx <- 1:floor(0.7*nrow(spotify_tracks_cleaned))
+spotify_tracks_train <- spotify_tracks_cleaned[train_idx, ]
+spotify_tracks_test <- spotify_tracks_cleaned[-train_idx,]
+
+x_train <- as.matrix(spotify_tracks_train[, -1])
+y_train <- as.matrix(spotify_tracks_train$popularity)
+
+x_test <- as.matrix(spotify_tracks_test[, -1])
+y_test <- as.matrix(spotify_tracks_test$popularity)
+
+ridge_reg <- glmnet(x_train, y_train, alpha = 0)
+cv_ridge <- cv.glmnet(x_train, y_train, alpha = 0)
+plot(cv_ridge)
+optimal_lambda <- cv_ridge$lambda.min
+optimal_lambda
+
+ridge_reg_2 <- glmnet(x_train, y_train, alpha = 0, lambda = optimal_lambda)
+
+ridge_pred <- predict(ridge_reg_2, newx = x_test, s = optimal_lambda)
+
+# Mean Absolute Error
+ridge_mae <- mean(abs(ridge_pred - y_test))
+ridge_mae
+```
+
+\newpage
+
+# References
+
+How to create a scree plot: \ 
+https://www.spsanderson.com/steveondata/posts/2023-10-24/index.html
+
+KMeans using PCA Scores: \ 
+https://rpubs.com/Musthofa_S/777722 
+
+Ridge Regression and Finding Optimal Lambda: \ 
+https://www.pluralsight.com/resources/blog/guides/linear-lasso-and-ridge-regression-with-r
